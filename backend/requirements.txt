@@ -1,0 +1,8 @@
+fastapi==0.111.0
+uvicorn==0.30.1
+mesa==2.3.0
+h3==3.7.6
+websockets==12.0
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.0

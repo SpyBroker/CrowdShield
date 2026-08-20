@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#0f172a"/>
+  <meta name="description" content="CrowdShield — Citizen Safety App. Real-time crowd density alerts and safe route guidance."/>
+  <title>CrowdShield — Citizen Safety</title>
+  <link rel="manifest" href="/pwa/manifest.json"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f172a;
+      --surface:   #1e293b;
+      --border:    rgba(255,255,255,0.08);
+      --text:      #f1f5f9;
+      --muted:     #94a3b8;
+      --red:       #ef4444;
+      --amber:     #f59e0b;
+      --green:     #10b981;
+      --violet:    #7c3aed;
+      --radius:    14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 28px; height: 28px; border-radius: 8px;
+      background: linear-gradient(135deg,#7c3aed,#4f46e5);
+      display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .logo-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo-sub  { font-size: 10px; color: var(--muted); }
+
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .lang-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .lang-btn:hover { background: rgba(255,255,255,0.12); }
+
+    .conn-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--red); transition: background 0.4s;
+    }
+    .conn-dot.connected { background: var(--green); }
+
+    /* ── Alert Banner ── */
+    #alert-banner {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+      animation: slide-in 0.3s ease;
+    }
+    #alert-banner.red    { background: rgba(239,68,68,0.18);   border-bottom: 1px solid rgba(239,68,68,0.4);   color: #fca5a5; }
+    #alert-banner.amber  { background: rgba(245,158,11,0.18);  border-bottom: 1px solid rgba(245,158,11,0.4);  color: #fcd34d; }
+    #alert-banner.green  { background: rgba(16,185,129,0.15);  border-bottom: 1px solid rgba(16,185,129,0.3);  color: #6ee7b7; display: flex; }
+    #alert-banner.show   { display: flex; }
+
+    /* ── Map ── */
+    #map { flex: 1; min-height: 0; position: relative; }
+
+    /* ── Route Legend Card ── */
+    #route-legend {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      z-index: 1500;
+      background: rgba(15,23,42,0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(16,185,129,0.35);
+      border-radius: 12px;
+      padding: 10px 14px;
+      min-width: 180px;
+      pointer-events: none;
+      transition: opacity 0.4s;
+    }
+    #route-legend.hidden { opacity: 0; }
+    .legend-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #34d399;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: #94a3b8;
+      margin-bottom: 5px;
+    }
+    .legend-line {
+      width: 28px;
+      height: 2px;
+      border-top: 2px dashed;
+      flex-shrink: 0;
+    }
+    .legend-line.green  { border-color: #10b981; }
+    .legend-line.red    { border-color: #ef4444; }
+    .legend-line.amber  { border-color: #f59e0b; }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    #route-count {
+      font-size: 10px;
+      color: #64748b;
+      margin-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 5px;
+    }
+
+    /* Leaflet path animation for safe routes */
+    @keyframes dash-flow {
+      to { stroke-dashoffset: -20; }
+    }
+    .safe-route-path {
+      animation: dash-flow 1s linear infinite;
+    }
+
+    /* ── Offline Banner ── */
+    #offline-banner {
+      display: none;
+      background: rgba(245,158,11,0.18);
+      border-top: 1px solid rgba(245,158,11,0.4);
+      padding: 6px 16px;
+      font-size: 11px;
+      color: #fcd34d;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    #offline-banner.show { display: block; }
+
+    /* ── Status Bar ── */
+    #status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-size: 10.5px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    /* ── FAB Report Button ── */
+    #fab {
+      position: fixed;
+      bottom: 72px;
+      right: 18px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      border: none;
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(239,68,68,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #fab:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(239,68,68,0.7); }
+
+    /* ── Modal ── */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none; align-items: flex-end;
+      z-index: 3000;
+      animation: fade-in 0.2s ease;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 20px 18px 32px;
+      width: 100%;
+      border-top: 1px solid var(--border);
+      animation: slide-up 0.3s ease;
+    }
+    .modal-title {
+      font-size: 16px; font-weight: 700; margin-bottom: 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+    .field input, .field textarea {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      resize: none;
+      transition: border 0.2s;
+    }
+    .field input:focus, .field textarea:focus { border-color: var(--violet); }
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .submit-btn:disabled { opacity: 0.5; }
+    .success-msg { color: var(--green); font-size: 12px; text-align: center; margin-top: 8px; display: none; }
+    .success-msg.show { display: block; }
+
+    @keyframes slide-in  { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+    @keyframes slide-up  { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes fade-in   { from { opacity: 0; } to { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡️</div>
+    <div>
+      <div class="logo-name">CrowdShield</div>
+      <div class="logo-sub" id="logo-sub">Citizen Safety App</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="lang-btn" id="lang-btn" onclick="toggleLang()">हिं</button>
+    <div class="conn-dot" id="conn-dot"></div>
+  </div>
+</header>
+
+<!-- Alert Banner -->
+<div id="alert-banner" class="show green">
+  <span id="banner-icon">✅</span>
+  <span id="banner-text">Connecting to live feed...</span>
+</div>
+
+<!-- Map -->
+<div id="map">
+  <!-- Route Legend overlay (inside map div so it scrolls with nothing, just floats) -->
+  <div id="route-legend" class="hidden">
+    <div class="legend-title">🗺️ Safe Path Guide</div>
+    <div class="legend-row">
+      <div class="legend-line green"></div>
+      <span>Recommended exit route</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="background:#10b981"></div>
+      <span>Safe zone</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="background:#f59e0b"></div>
+      <span>Caution area</span>
+    </div>
+    <div class="legend-row">
+      <div class="legend-dot" style="background:#ef4444"></div>
+      <span>Avoid — high risk</span>
+    </div>
+    <div id="route-count">Calculating safe paths…</div>
+  </div>
+</div>
+
+<!-- Offline Banner -->
+<div id="offline-banner" id="offline-banner">
+  ⚠️ <span id="offline-text">Offline — showing cached data</span>
+</div>
+
+<!-- Status Bar -->
+<div id="status-bar">
+  <span id="status-left">Agents: —</span>
+  <span id="status-right">Last updated: —</span>
+</div>
+
+<!-- FAB Report Button -->
+<button id="fab" onclick="openModal()" title="Report Incident">🚨</button>
+
+<!-- Report Modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-title-text">Report Incident</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="field">
+      <label id="label-desc">What's happening?</label>
+      <textarea id="desc" rows="3" placeholder="e.g. Crowd crush near Gate 2, people falling..."></textarea>
+    </div>
+    <div class="field">
+      <label id="label-lat">Latitude</label>
+      <input type="number" step="any" id="lat" placeholder="28.6139"/>
+    </div>
+    <div class="field">
+      <label id="label-lon">Longitude</label>
+      <input type="number" step="any" id="lon" placeholder="77.2090"/>
+    </div>
+    <button class="submit-btn" id="submit-btn" onclick="submitReport()">
+      <span id="submit-label">Submit Report</span>
+    </button>
+    <div class="success-msg" id="success-msg">✓ Report submitted successfully!</div>
+  </div>
+</div>
+
+<script>
+// ── i18n ─────────────────────────────────────────────────────────────────────
+const strings = {
+  en: {
+    sub: 'Citizen Safety App',
+    banner_critical: 'CRITICAL: Crowd crush risk near you — ',
+    banner_warning:  'WARNING: Crowd density rising — ',
+    banner_safe:     'All clear. Crowd flow is nominal.',
+    use_exit:        'Use Gate 2',
+    report:          'Report Incident',
+    label_what:      "What's happening?",
+    label_lat:       'Latitude',
+    label_lon:       'Longitude',
+    submit:          'Submit Report',
+    submitted:       '✓ Report submitted successfully!',
+    offline:         'Offline — showing cached data',
+    agents:          'Agents',
+    updated:         'Last updated',
+    monitoring:      'System monitoring',
+    lang_toggle:     'हिं',
+  },
+  hi: {
+    sub: 'नागरिक सुरक्षा ऐप',
+    banner_critical: 'चेतावनी: आपके पास भीड़ का खतरा है — ',
+    banner_warning:  'सावधान: आपके क्षेत्र में भीड़ बढ़ रही है — ',
+    banner_safe:     'सब ठीक है। भीड़ प्रवाह सामान्य है।',
+    use_exit:        'गेट 2 का उपयोग करें',
+    report:          'घटना रिपोर्ट करें',
+    label_what:      'क्या हो रहा है?',
+    label_lat:       'अक्षांश',
+    label_lon:       'देशांतर',
+    submit:          'रिपोर्ट जमा करें',
+    submitted:       '✓ रिपोर्ट सफलतापूर्वक जमा की गई!',
+    offline:         'ऑफ़लाइन — कैश डेटा दिखा रहे हैं',
+    agents:          'एजेंट',
+    updated:         'अंतिम अपडेट',
+    monitoring:      'सिस्टम निगरानी में',
+    lang_toggle:     'EN',
+  }
+};
+let lang = localStorage.getItem('cs_lang') || 'en';
+
+function t(key) { return strings[lang][key] || strings.en[key] || key; }
+
+function applyLang() {
+  document.getElementById('logo-sub').textContent       = t('sub');
+  document.getElementById('offline-text').textContent   = t('offline');
+  document.getElementById('label-desc').textContent     = t('label_what');
+  document.getElementById('label-lat').textContent      = t('label_lat');
+  document.getElementById('label-lon').textContent      = t('label_lon');
+  document.getElementById('submit-label').textContent   = t('submit');
+  document.getElementById('modal-title-text').textContent = t('report');
+  document.getElementById('success-msg').textContent    = t('submitted');
+  document.getElementById('lang-btn').textContent       = t('lang_toggle');
+  document.querySelector('#fab').title                  = t('report');
+}
+
+function toggleLang() {
+  lang = lang === 'en' ? 'hi' : 'en';
+  localStorage.setItem('cs_lang', lang);
+  applyLang();
+  updateBanner(lastRisk, lastNearestHex);
+}
+applyLang();
+
+// ── Coordinate Mapping (matches App.jsx exactly) ────────────────────────────
+function mapToGps(x, y) {
+  return [28.6139 + (y - 50) * 0.000009, 77.2090 + (x - 50) * 0.000010];
+}
+function gpsToMap(lat, lon) {
+  return [
+    (lon - 77.2090) / 0.000010 + 50,
+    (lat - 28.6139) / 0.000009 + 50
+  ];
+}
+
+// Static venue: 3 entrances, 1 base exit (mirrors App.jsx)
+const BASE_ENTRANCES = [
+  mapToGps(5, 50),
+  mapToGps(5, 20),
+  mapToGps(5, 80)
+];
+const BASE_EXIT = mapToGps(95, 50);
+
+// ── A* Pathfinding (ported from App.jsx) ─────────────────────────────────────
+function findPathAStar(startX, startY, endX, endY, redHexes) {
+  const cols = 51, rows = 51, scale = 2;
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const startG = [clamp(Math.round(startX / scale), 0, cols-1), clamp(Math.round(startY / scale), 0, rows-1)];
+  const endG   = [clamp(Math.round(endX   / scale), 0, cols-1), clamp(Math.round(endY   / scale), 0, rows-1)];
+
+  function dist(a, b) { return Math.hypot(a[0]-b[0], a[1]-b[1]); }
+
+  function getCellCost(gx, gy) {
+    const lx = gx * scale, ly = gy * scale;
+    // Static walls
+    if (lx >= 44 && lx <= 56 && (ly >= 58 || ly <= 42)) return Infinity;
+    // Hex penalties
+    let penalty = 1.0;
+    for (const h of redHexes) {
+      const d = Math.hypot(lx - h.x, ly - h.y);
+      if (d <= 12) {
+        if (h.risk === 'red')   return Infinity;
+        if (h.risk === 'amber') penalty += 15;
+      }
+    }
+    return penalty;
+  }
+
+  let openSet = [{ g: 0, h: dist(startG, endG), f: 0, pos: startG, parent: null }];
+  const closed = Array.from({length: cols}, () => new Uint8Array(rows));
+  let iterations = 0;
+
+  while (openSet.length > 0 && iterations++ < 1200) {
+    openSet.sort((a, b) => a.f - b.f);
+    const cur = openSet.shift();
+    const [cx, cy] = cur.pos;
+    if (cx === endG[0] && cy === endG[1]) {
+      const path = [];
+      let c = cur;
+      while (c) { path.push([c.pos[0]*scale, c.pos[1]*scale]); c = c.parent; }
+      return path.reverse();
+    }
+    closed[cx][cy] = 1;
+    for (const [dx, dy] of [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+      const nx = cx+dx, ny = cy+dy;
+      if (nx<0||nx>=cols||ny<0||ny>=rows||closed[nx][ny]) continue;
+      const cost = getCellCost(nx, ny);
+      if (!isFinite(cost)) continue;
+      const w = (dx&&dy) ? 1.414 : 1;
+      const g = cur.g + w*cost;
+      const ex = openSet.find(o => o.pos[0]===nx && o.pos[1]===ny);
+      if (!ex) {
+        openSet.push({ g, h: dist([nx,ny], endG), f: g + dist([nx,ny],endG), pos:[nx,ny], parent:cur });
+      } else if (g < ex.g) {
+        ex.g = g; ex.f = g + ex.h; ex.parent = cur;
+      }
+    }
+  }
+  return null;
+}
+
+// ── Map Setup ─────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true, attributionControl: false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 20, subdomains: 'abcd'
+}).addTo(map);
+map.setView([28.6139, 77.2090], 17);
+
+// High-z pane for route lines so they stay above tile layers
+const routePane = map.createPane('routePane');
+routePane.style.zIndex = 650;
+routePane.style.pointerEvents = 'none';
+
+const hexLayers = {};
+const routeLayers = []; // track active route polylines
+let userMarker = null;
+let lastRisk = 'green';
+let lastNearestHex = null;
+let lastUpdateTime = null;
+
+// User location
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(pos => {
+    const { latitude, longitude } = pos.coords;
+    if (!userMarker) {
+      userMarker = L.circleMarker([latitude, longitude], {
+        radius: 8, fillColor: '#7c3aed', color: '#a78bfa',
+        weight: 2, fillOpacity: 0.95
+      }).addTo(map).bindPopup('📍 Your Location');
+    } else {
+      userMarker.setLatLng([latitude, longitude]);
+    }
+    document.getElementById('lat').value = latitude.toFixed(6);
+    document.getElementById('lon').value = longitude.toFixed(6);
+  }, () => {}, { enableHighAccuracy: true });
+}
+
+// ── WebSocket Connection ──────────────────────────────────────────────────────
+let ws = null;
+let reconnectTimer = null;
+let cachedHexData = JSON.parse(localStorage.getItem('cs_hex_cache') || '[]');
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Connect to parent origin (dashboard backend)
+  const host = location.host.replace('/pwa', '');
+  ws = new WebSocket(`${proto}//${host}/ws`);
+
+  ws.onopen = () => {
+    setConnected(true);
+    clearTimeout(reconnectTimer);
+    document.getElementById('offline-banner').classList.remove('show');
+    renderHexData(cachedHexData);
+  };
+
+  ws.onmessage = evt => {
+    try {
+      const data = JSON.parse(evt.data);
+      const hexData = data.hexagons || [];
+      lastUpdateTime = new Date();
+
+      // Cache for offline fallback
+      localStorage.setItem('cs_hex_cache', JSON.stringify(hexData));
+      cachedHexData = hexData;
+
+      renderHexData(hexData);
+      updateStatusBar(data.agents ? data.agents.length : 0);
+    } catch(e) {}
+  };
+
+  ws.onclose = () => {
+    setConnected(false);
+    showOfflineBanner();
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function setConnected(ok) {
+  document.getElementById('conn-dot').classList.toggle('connected', ok);
+}
+
+function showOfflineBanner() {
+  const banner = document.getElementById('offline-banner');
+  if (lastUpdateTime) {
+    const secs = Math.round((Date.now() - lastUpdateTime) / 1000);
+    banner.innerHTML = `⚠️ ${t('offline')} (${secs}s ago)`;
+  } else {
+    banner.innerHTML = `⚠️ ${t('offline')}`;
+  }
+  banner.classList.add('show');
+}
+
+// ── Route Computation ────────────────────────────────────────────────────────
+let routeDebounce = null;
+function computeRoutes(hexData) {
+  clearTimeout(routeDebounce);
+  routeDebounce = setTimeout(() => {
+    // Build red/amber hex list in local map coords
+    const redHexes = hexData
+      .filter(h => h.risk_level === 'red' || h.risk_level === 'amber')
+      .map(h => {
+        const cLat = h.boundary.reduce((s,p) => s+p[0], 0) / h.boundary.length;
+        const cLon = h.boundary.reduce((s,p) => s+p[1], 0) / h.boundary.length;
+        const [x, y] = gpsToMap(cLat, cLon);
+        return { x, y, risk: h.risk_level };
+      });
+
+    // Remove old route lines
+    routeLayers.forEach(l => l.remove());
+    routeLayers.length = 0;
+
+    let count = 0;
+    for (const entGps of BASE_ENTRANCES) {
+      const [sx, sy] = gpsToMap(entGps[0], entGps[1]);
+      const [ex, ey] = gpsToMap(BASE_EXIT[0], BASE_EXIT[1]);
+      const path = findPathAStar(sx, sy, ex, ey, redHexes);
+      if (path && path.length > 0) {
+        const latlngs = path.map(([x, y]) => mapToGps(x, y));
+        // Smooth the path a little by taking every 3rd point
+        const sparse = latlngs.filter((_, i) => i % 3 === 0 || i === latlngs.length-1);
+        const pl = L.polyline(sparse, {
+          color: '#10b981',
+          weight: 3,
+          opacity: 0.85,
+          dashArray: '8 6',
+          lineCap: 'round',
+          lineJoin: 'round',
+          pane: 'routePane',
+          className: 'safe-route-path'
+        }).addTo(map);
+        pl.bindTooltip('🟢 Safe Exit Route', { sticky: true, direction: 'top', className: '' });
+        routeLayers.push(pl);
+        count++;
+      }
+    }
+
+    // Update legend
+    const legend = document.getElementById('route-legend');
+    const countEl = document.getElementById('route-count');
+    if (count > 0) {
+      legend.classList.remove('hidden');
+      countEl.textContent = `${count} safe route${count !== 1 ? 's' : ''} available — follow green path`;
+    } else {
+      legend.classList.remove('hidden');
+      countEl.textContent = 'No clear route — seek nearest exit immediately';
+    }
+  }, 300);
+}
+
+function renderHexData(hexData) {
+  // Remove old layers not in new data
+  const newIds = new Set(hexData.map(h => h.hex));
+  for (const id of Object.keys(hexLayers)) {
+    if (!newIds.has(id)) { hexLayers[id].remove(); delete hexLayers[id]; }
+  }
+
+  let nearestHex = null;
+  let nearestDist = Infinity;
+  const userLL = userMarker ? userMarker.getLatLng() : null;
+
+  hexData.forEach(hex => {
+    const color = hex.risk_level === 'red' ? '#ef4444'
+                : hex.risk_level === 'amber' ? '#f59e0b' : '#10b981';
+    const positions = hex.boundary.map(p => [p[0], p[1]]);
+
+    if (hexLayers[hex.hex]) {
+      hexLayers[hex.hex].setStyle({ color, fillColor: color });
+    } else {
+      hexLayers[hex.hex] = L.polygon(positions, {
+        color, fillColor: color, fillOpacity: 0.25, weight: 1.5
+      }).addTo(map);
+    }
+
+    // Find nearest high-risk hex to user
+    if (userLL && hex.risk_level !== 'green') {
+      const center = L.latLng(
+        hex.boundary.reduce((s,p) => s+p[0], 0) / hex.boundary.length,
+        hex.boundary.reduce((s,p) => s+p[1], 0) / hex.boundary.length
+      );
+      const d = userLL.distanceTo(center);
+      if (d < nearestDist) { nearestDist = d; nearestHex = hex; }
+    }
+  });
+
+  // Determine overall worst risk
+  const allRisks = hexData.map(h => h.risk_level);
+  lastRisk = allRisks.includes('red') ? 'red'
+           : allRisks.includes('amber') ? 'amber' : 'green';
+  lastNearestHex = nearestHex;
+
+  updateBanner(lastRisk, nearestHex);
+
+  // Recompute safe routes whenever hex risk changes
+  computeRoutes(hexData);
+}
+
+let lastReportedRisk = 'green';
+function updateBanner(riskLevel, nearestHex) {
+  const banner = document.getElementById('alert-banner');
+  const icon   = document.getElementById('banner-icon');
+  const text   = document.getElementById('banner-text');
+  banner.className = riskLevel + ' show';
+
+  if (riskLevel === 'red') {
+    icon.textContent = '🚨';
+    text.textContent = t('banner_critical') + t('use_exit');
+    if (lastReportedRisk !== 'red') {
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    }
+  } else if (riskLevel === 'amber') {
+    icon.textContent = '⚠️';
+    text.textContent = t('banner_warning') + t('use_exit');
+    if (lastReportedRisk === 'green') {
+      if ('vibrate' in navigator) {
+        navigator.vibrate(100);
+      }
+    }
+  } else {
+    icon.textContent = '✅';
+    text.textContent = t('banner_safe');
+  }
+  lastReportedRisk = riskLevel;
+}
+
+function updateStatusBar(agentCount) {
+  const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('status-left').textContent  = `${t('agents')}: ${agentCount}`;
+  document.getElementById('status-right').textContent = `${t('updated')}: ${now}`;
+}
+
+// ── Report Modal ──────────────────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('success-msg').classList.remove('show');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function submitReport() {
+  const desc = document.getElementById('desc').value.trim();
+  const lat  = parseFloat(document.getElementById('lat').value);
+  const lon  = parseFloat(document.getElementById('lon').value);
+
+  if (!desc) { document.getElementById('desc').focus(); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/report-incident', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: desc,
+        latitude: lat || 28.6139,
+        longitude: lon || 77.2090,
+        user_id: 'citizen_pwa_' + Date.now()
+      })
+    });
+
+    if (res.ok) {
+      document.getElementById('success-msg').classList.add('show');
+      document.getElementById('desc').value = '';
+      setTimeout(closeModal, 1800);
+    }
+  } catch(e) {
+    alert('Failed to submit report. Please try again.');
+  }
+
+  btn.disabled = false;
+}
+
+// Close modal on backdrop click
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/pwa/sw.js')
+      .then(reg => console.log('Service Worker registered successfully:', reg.scope))
+      .catch(err => console.error('Service Worker registration failed:', err));
+  });
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+connect();
+
+// Render cached data immediately while connecting
+if (cachedHexData.length > 0) {
+  renderHexData(cachedHexData);
+}
+</script>
+</body>
+</html>

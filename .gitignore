@@ -1,0 +1,75 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+
+# mypy / pyright
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+
+# ── Node / Vite (dashboard) ───────────────────────────────────────────────────
+node_modules/
+dashboard/node_modules/
+frontend/node_modules/
+
+# Vite build output (served statically by FastAPI — committed intentionally)
+# Uncomment the line below if you do NOT want to commit the built assets:
+# dashboard/dist/
+
+# npm / yarn / pnpm lock hygiene
+.npm/
+.yarn/
+.pnpm-debug.log*
+
+# Misc JS tooling
+*.tsbuildinfo
+.eslintcache
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# ── IDEs & editors ────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS generated ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Project-specific ─────────────────────────────────────────────────────────
+# Scratch / temp helper scripts created during development
+check_build.py
+*.tmp
