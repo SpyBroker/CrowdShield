@@ -7,13 +7,81 @@
   <meta name="description" content="CrowdShield — Citizen Safety App. Real-time crowd density alerts and safe route guidance."/>
   <title>CrowdShield — Citizen Safety</title>
   <link rel="manifest" href="/pwa/manifest.json"/>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Startup Splash Screen ── */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: linear-gradient(135deg, #060b19 0%, #0f172a 50%, #1e1b4b 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+    #splash-screen.fade-out {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .splash-logo-container {
+      text-align: center;
+      animation: pulse-glow 2s ease-in-out infinite alternate;
+    }
+    .splash-icon {
+      font-size: 64px;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 0 20px rgba(124,58,237,0.6));
+    }
+    .splash-title {
+      font-family: 'Dancing Script', 'Great Vibes', cursive;
+      font-size: 56px;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 0 25px rgba(255,255,255,0.7), 0 0 50px rgba(124,58,237,0.6);
+      letter-spacing: 1px;
+    }
+    .splash-sub {
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: #a78bfa;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      margin-top: 10px;
+      font-weight: 600;
+    }
+    .splash-loader {
+      width: 60px;
+      height: 3px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      margin-top: 36px;
+      overflow: hidden;
+      position: relative;
+    }
+    .splash-loader-bar {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #7c3aed, #38bdf8);
+      animation: splash-bar 2.5s ease-in-out forwards;
+    }
+
+    @keyframes splash-bar {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(0%); }
+    }
+    @keyframes pulse-glow {
+      0% { transform: scale(0.98); opacity: 0.9; }
+      100% { transform: scale(1.02); opacity: 1; }
+    }
 
     :root {
       --bg:        #0f172a;
@@ -257,18 +325,410 @@
       transition: opacity 0.2s;
     }
     .submit-btn:disabled { opacity: 0.5; }
+    /* ── Header Hamburger Menu Button ── */
+    #menu-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    /* ── Left Sidebar Drawer ── */
+    #sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 4000;
+      display: none;
+      animation: fade-in 0.2s ease;
+    }
+    #sidebar-overlay.open { display: block; }
+
+    #sidebar-drawer {
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: 290px;
+      max-width: 82vw;
+      background: #0f172a;
+      border-right: 1px solid var(--border);
+      z-index: 4100;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 4px 0 25px rgba(0,0,0,0.6);
+    }
+    #sidebar-drawer.open { transform: translateX(0); }
+
+    .sidebar-header {
+      padding: 16px;
+      background: #1e293b;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .user-profile { display: flex; align-items: center; gap: 10px; }
+    .user-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .user-welcome { font-size: 14px; font-weight: 700; color: var(--text); }
+    .user-status  { font-size: 10.5px; color: var(--muted); }
+    .sidebar-close { background: none; border: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+
+    .sidebar-content {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .section-heading {
+      font-size: 11px;
+      font-weight: 700;
+      color: #a78bfa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    .help-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .help-item { margin-bottom: 10px; }
+    .help-item:last-child { margin-bottom: 0; }
+    .help-item strong { font-size: 11.5px; color: #38bdf8; display: block; margin-bottom: 2px; }
+    .help-item p { font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+
+    .user-info-card {
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.3);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      background: #1e293b;
+    }
+
+    .auth-btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .login-btn {
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      color: white;
+    }
+    .logout-btn {
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.4);
+      color: #fca5a5;
+    }
+    .logout-btn:hover { background: rgba(239,68,68,0.25); }
+
     .success-msg { color: var(--green); font-size: 12px; text-align: center; margin-top: 8px; display: none; }
     .success-msg.show { display: block; }
+
+    /* ── PWA Bottom Navigation Dock ── */
+    #pwa-bottom-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 6px 4px;
+      flex-shrink: 0;
+      z-index: 2500;
+    }
+    .nav-tab {
+      background: none;
+      border: none;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 4px 10px;
+      border-radius: 8px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-tab.active {
+      color: #a78bfa;
+      background: rgba(124,58,237,0.15);
+    }
+    .nav-tab .nav-icon { font-size: 16px; }
+
+    /* ── Sliding Dashboard Feature Panel ── */
+    #pwa-feature-panel {
+      position: fixed;
+      bottom: 52px;
+      left: 0; right: 0;
+      height: 46dvh;
+      background: rgba(15,23,42,0.96);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+      border-radius: var(--radius) var(--radius) 0 0;
+      z-index: 2400;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: slide-up 0.3s ease;
+      box-shadow: 0 -4px 25px rgba(0,0,0,0.5);
+    }
+    #pwa-feature-panel.hidden { display: none; }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .panel-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .pwa-tab-content {
+      display: none;
+      padding: 14px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .pwa-tab-content.active { display: block; }
+
+    /* Cards & Badges */
+    .ai-summary-btn {
+      background: linear-gradient(135deg,#7c3aed,#4f46e5);
+      border: none;
+      color: white;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .ai-summary-card {
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(124,58,237,0.35);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .metric-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .metric-val {
+      font-size: 22px;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 4px;
+    }
+    .metric-val.amber { color: #f59e0b; }
+    .metric-val.red   { color: #ef4444; }
+    .metric-lbl {
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .rec-item {
+      background: rgba(255,255,255,0.03);
+      border-left: 3px solid #f59e0b;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .rec-item.red { border-left-color: #ef4444; }
+    .rec-title { font-size: 12.5px; font-weight: 700; color: #f1f5f9; margin-bottom: 3px; }
+    .rec-reason { font-size: 11px; color: #94a3b8; }
+
+    .logs-title { font-size: 12px; font-weight: 700; color: #a78bfa; margin-bottom: 8px; }
+    .log-entry {
+      font-size: 11px;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* ── Incidents Badge Overlay ── */
+    #incidents-badge {
+      position: fixed;
+      top: 62px;
+      right: 14px;
+      z-index: 3500;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95));
+      backdrop-filter: blur(8px);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.4);
+      padding: 7px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(239,68,68,0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    #incidents-badge.hidden { display: none !important; }
+    #incidents-badge:hover { transform: scale(1.06); }
+
+    /* Custom Pulsing Incident Map Marker CSS */
+    .incident-map-pin {
+      width: 32px;
+      height: 32px;
+      background: rgba(239,68,68,0.9);
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      box-shadow: 0 0 15px rgba(239,68,68,0.8);
+      animation: pulse-pin 1.5s infinite;
+    }
+    @keyframes pulse-pin {
+      0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+      100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
+
+    .pitch-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .pitch-card h3 { color: #a78bfa; margin-bottom: 6px; font-size: 15px; }
+    .pitch-bullets div { margin-top: 8px; font-size: 11.5px; color: #cbd5e1; }
 
     @keyframes slide-in  { from { transform: translateY(-100%); } to { transform: translateY(0); } }
     @keyframes slide-up  { from { transform: translateY(100%); } to { transform: translateY(0); } }
     @keyframes fade-in   { from { opacity: 0; } to { opacity: 1; } }
   </style>
-</head>
 <body>
+
+<!-- Startup Splash Screen -->
+<div id="splash-screen">
+  <div class="splash-logo-container">
+    <div class="splash-icon">🛡️</div>
+    <div class="splash-title">CrowdShield</div>
+    <div class="splash-sub">AI-Powered Citizen Safety</div>
+  </div>
+  <div class="splash-loader">
+    <div class="splash-loader-bar"></div>
+  </div>
+</div>
+
+<!-- Left Sidebar Drawer Overlay & Container -->
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<aside id="sidebar-drawer">
+  <div class="sidebar-header">
+    <div class="user-profile">
+      <div class="user-avatar" id="user-avatar">👤</div>
+      <div>
+        <div class="user-welcome" id="sidebar-welcome">Welcome, Citizen</div>
+        <div class="user-status" id="sidebar-status">Guest Account</div>
+      </div>
+    </div>
+    <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+  </div>
+
+  <div class="sidebar-content">
+    <!-- Help & App Workflow Section -->
+    <div class="sidebar-section">
+      <div class="section-heading">❓ Help & Workflow Guide</div>
+      <div class="help-card">
+        <div class="help-item">
+          <strong>1. Live Density Heatmap</strong>
+          <p>Color-coded spatial hexagons update in real-time. Red = High crush risk, Amber = Caution, Green = Safe flow.</p>
+        </div>
+        <div class="help-item">
+          <strong>2. Animated Safe Exit Guidance</strong>
+          <p>Follow green dashed polylines on the map. The system dynamically re-routes paths around congested bottleneck zones.</p>
+        </div>
+        <div class="help-item">
+          <strong>3. Spot Map Coordinates</strong>
+          <p>Tap anywhere on the map to display exact Latitude/Longitude and send instant citizen hazard reports.</p>
+        </div>
+        <div class="help-item">
+          <strong>4. AI Alerts & Voice Announcements</strong>
+          <p>Receive real-time push notifications and voice warnings in English or Hindi during crowd surges.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account & Security Section -->
+    <div class="sidebar-section" style="margin-top:16px;">
+      <div class="section-heading">🔑 Account & Security</div>
+      <div id="auth-box-logged-out">
+        <button class="auth-btn login-btn" onclick="openLoginModal()">Login / Register</button>
+      </div>
+      <div id="auth-box-logged-in" style="display:none;">
+        <div class="user-info-card">
+          <div style="font-weight:700; color:#10b981;" id="user-display-name">Citizen</div>
+          <div style="font-size:11px; color:var(--muted);" id="user-display-contact">+91 User</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar Footer Logout Button -->
+  <div class="sidebar-footer">
+    <button id="logout-btn" class="auth-btn logout-btn" style="display:none;" onclick="handleLogout()">
+      🚪 Logout
+    </button>
+  </div>
+</aside>
 
 <header>
   <div class="logo">
+    <button id="menu-btn" onclick="toggleSidebar()" title="Open Menu">☰</button>
     <div class="logo-icon">🛡️</div>
     <div>
       <div class="logo-name">CrowdShield</div>
@@ -276,6 +736,8 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="lang-btn" id="sound-btn" onclick="toggleSoundAlerts()" title="Toggle Sound Sirens">🔊</button>
+    <button class="lang-btn" id="notif-btn" onclick="toggleNotifications()" title="Enable Alerts">🔔</button>
     <button class="lang-btn" id="lang-btn" onclick="toggleLang()">हिं</button>
     <div class="conn-dot" id="conn-dot"></div>
   </div>
@@ -289,6 +751,12 @@
 
 <!-- Map -->
 <div id="map">
+  <!-- Incidents Badge Overlay -->
+  <div id="incidents-badge" class="hidden" onclick="focusOnIncidents()" title="Click to view reported incidents">
+    <span id="incidents-count-icon">🚨</span>
+    <span id="incidents-count-text">0 Reported Incidents</span>
+  </div>
+
   <!-- Route Legend overlay (inside map div so it scrolls with nothing, just floats) -->
   <div id="route-legend" class="hidden">
     <div class="legend-title">🗺️ Safe Path Guide</div>
@@ -334,8 +802,17 @@
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="field">
+      <label id="label-category">Incident Type</label>
+      <select id="category" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; font-family: inherit; outline: none;">
+        <option value="Crowd Crush" style="background:#1e293b;">🚨 Crowd Crush / Bottleneck</option>
+        <option value="Gate Blocked" style="background:#1e293b;">🚪 Gate / Exit Blocked</option>
+        <option value="Medical Emergency" style="background:#1e293b;">🚑 Medical Emergency</option>
+        <option value="Fallen Person" style="background:#1e293b;">⚠️ Person Fallen / Trample Risk</option>
+      </select>
+    </div>
+    <div class="field">
       <label id="label-desc">What's happening?</label>
-      <textarea id="desc" rows="3" placeholder="e.g. Crowd crush near Gate 2, people falling..."></textarea>
+      <textarea id="desc" rows="3" placeholder="e.g. Severe overcrowding near Gate 2..."></textarea>
     </div>
     <div class="field">
       <label id="label-lat">Latitude</label>
@@ -351,6 +828,118 @@
     <div class="success-msg" id="success-msg">✓ Report submitted successfully!</div>
   </div>
 </div>
+
+<!-- Login Modal -->
+<div class="modal-backdrop" id="login-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>🔑 Citizen Login / Register</span>
+      <button class="modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="login-name" placeholder="e.g. Rahul Sharma" />
+    </div>
+    <div class="field">
+      <label>Phone / Email</label>
+      <input type="text" id="login-contact" placeholder="e.g. +91 9876543210" />
+    </div>
+    <button class="submit-btn" onclick="handleLogin()" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);">
+      ✓ Login to CrowdShield
+    </button>
+  </div>
+</div>
+
+<!-- Sliding Dashboard Feature Panel -->
+<div id="pwa-feature-panel" class="hidden">
+  <div class="panel-header">
+    <span id="panel-title">🤖 AI Recommendations</span>
+    <button class="panel-close" onclick="switchPwaTab('map')">✕</button>
+  </div>
+
+  <!-- Tab Content: AI Alerts -->
+  <div id="tab-alerts" class="pwa-tab-content active">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <span style="font-size:11px; font-weight:700; color:var(--muted)">LIVE THREAT RECOMMENDATIONS</span>
+      <button onclick="fetchPwaAiSummary()" class="ai-summary-btn">🤖 AI Summary</button>
+    </div>
+    <div id="pwa-ai-summary-box" style="display:none;" class="ai-summary-card"></div>
+    <div id="pwa-recommendations-list">No active recommendations. System monitoring.</div>
+  </div>
+
+  <!-- Tab Content: Analytics -->
+  <div id="tab-analytics" class="pwa-tab-content">
+    <div class="analytics-grid">
+      <div class="metric-card">
+        <div class="metric-val" id="metric-peds">0</div>
+        <div class="metric-lbl">Active Crowd Count</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val" id="metric-speed">0.0 m/s</div>
+        <div class="metric-lbl">Mean Walking Velocity</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val amber" id="metric-amber">0</div>
+        <div class="metric-lbl">Amber Warning Cells</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val red" id="metric-red">0</div>
+        <div class="metric-lbl">Red Critical Cells</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Logs -->
+  <div id="tab-logs" class="pwa-tab-content">
+    <div class="logs-section">
+      <div class="logs-title">📋 Citizen Incident Reports</div>
+      <div id="pwa-incidents-list">Loading incidents...</div>
+    </div>
+    <div class="logs-section" style="margin-top:16px;">
+      <div class="logs-title">🤖 Recommendation History Log</div>
+      <div id="pwa-rec-history-list">Loading history...</div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Pitch Deck -->
+  <div id="tab-pitch" class="pwa-tab-content">
+    <div class="pitch-card">
+      <h3>🛡️ CrowdShield System Overview</h3>
+      <p>AI-Powered Real-Time Early Warning Command System for Crowd Stampedes</p>
+      <div class="pitch-bullets">
+        <div>1️⃣ <b>Agent-Based Simulation:</b> 100x100m venue digital twin generating telemetry.</div>
+        <div>2️⃣ <b>Privacy H3 Hashing:</b> Spatial binning into resolution-14 Uber H3 hexagons.</div>
+        <div>3️⃣ <b>GradientBoosting Classifier:</b> 99.97% accurate ML risk scoring.</div>
+        <div>4️⃣ <b>Dual-Gate Fusion Logic:</b> Heuristics + ML for false-alarm reduction.</div>
+        <div>5️⃣ <b>Citizen PWA Navigation:</b> Animated A* safe exit route guidance.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Navigation Bar for PWA -->
+<nav id="pwa-bottom-nav">
+  <button class="nav-tab active" id="tab-btn-map" onclick="switchPwaTab('map')">
+    <span class="nav-icon">🗺️</span>
+    <span class="nav-label">Map</span>
+  </button>
+  <button class="nav-tab" id="tab-btn-alerts" onclick="switchPwaTab('alerts')">
+    <span class="nav-icon">🤖</span>
+    <span class="nav-label">AI Alerts</span>
+  </button>
+  <button class="nav-tab" id="tab-btn-analytics" onclick="switchPwaTab('analytics')">
+    <span class="nav-icon">📈</span>
+    <span class="nav-label">Analytics</span>
+  </button>
+  <button class="nav-tab" id="tab-btn-logs" onclick="switchPwaTab('logs')">
+    <span class="nav-icon">📋</span>
+    <span class="nav-label">Logs</span>
+  </button>
+  <button class="nav-tab" id="tab-btn-pitch" onclick="switchPwaTab('pitch')">
+    <span class="nav-icon">🎤</span>
+    <span class="nav-label">Pitch Deck</span>
+  </button>
+</nav>
 
 <script>
 // ── i18n ─────────────────────────────────────────────────────────────────────
@@ -416,6 +1005,86 @@ function toggleLang() {
   updateBanner(lastRisk, lastNearestHex);
 }
 applyLang();
+
+// ── Sidebar Drawer & Authentication Logic ────────────────────────────────────
+function toggleSidebar() {
+  const drawer = document.getElementById('sidebar-drawer');
+  const overlay = document.getElementById('sidebar-overlay');
+  drawer.classList.toggle('open');
+  overlay.classList.toggle('open');
+}
+
+function openLoginModal() {
+  toggleSidebar();
+  document.getElementById('login-modal').classList.add('open');
+}
+
+function closeLoginModal() {
+  document.getElementById('login-modal').classList.remove('open');
+}
+
+function handleLogin() {
+  const name = document.getElementById('login-name').value.trim();
+  const contact = document.getElementById('login-contact').value.trim();
+
+  if (!name) {
+    document.getElementById('login-name').focus();
+    return;
+  }
+
+  const user = { name, contact: contact || '+91 Citizen' };
+  localStorage.setItem('cs_user', JSON.stringify(user));
+  closeLoginModal();
+  updateUserAuthUI();
+  alert(`Welcome to CrowdShield, ${name}!`);
+}
+
+function handleLogout() {
+  localStorage.removeItem('cs_user');
+  updateUserAuthUI();
+  toggleSidebar();
+}
+
+function updateUserAuthUI() {
+  const raw = localStorage.getItem('cs_user');
+  const logoSub = document.getElementById('logo-sub');
+  const welcome = document.getElementById('sidebar-welcome');
+  const status = document.getElementById('sidebar-status');
+  const avatar = document.getElementById('user-avatar');
+  const outBox = document.getElementById('auth-box-logged-out');
+  const inBox = document.getElementById('auth-box-logged-in');
+  const logoutBtn = document.getElementById('logout-btn');
+  const displayName = document.getElementById('user-display-name');
+  const displayContact = document.getElementById('user-display-contact');
+
+  if (raw) {
+    try {
+      const user = JSON.parse(raw);
+      const firstName = user.name.split(' ')[0];
+      if (logoSub) logoSub.textContent = `Welcome, ${firstName}`;
+      if (welcome) welcome.textContent = `Welcome, ${user.name}`;
+      if (status) status.textContent = `Authenticated Citizen`;
+      if (avatar) avatar.textContent = firstName.charAt(0).toUpperCase();
+      if (displayName) displayName.textContent = user.name;
+      if (displayContact) displayContact.textContent = user.contact;
+
+      if (outBox) outBox.style.display = 'none';
+      if (inBox) inBox.style.display = 'block';
+      if (logoutBtn) logoutBtn.style.display = 'block';
+      return;
+    } catch(e) {}
+  }
+
+  if (logoSub) logoSub.textContent = t('sub');
+  if (welcome) welcome.textContent = 'Welcome, Citizen';
+  if (status) status.textContent = 'Guest Account';
+  if (avatar) avatar.textContent = '👤';
+  if (outBox) outBox.style.display = 'block';
+  if (inBox) inBox.style.display = 'none';
+  if (logoutBtn) logoutBtn.style.display = 'none';
+}
+
+updateUserAuthUI();
 
 // ── Coordinate Mapping (matches App.jsx exactly) ────────────────────────────
 function mapToGps(x, y) {
@@ -559,7 +1228,44 @@ function connect() {
       cachedHexData = hexData;
 
       renderHexData(hexData);
-      updateStatusBar(data.agents ? data.agents.length : 0);
+      const agentCount = data.agents ? data.agents.length : 0;
+      updateStatusBar(agentCount);
+
+      // Update PWA Live Analytics & Metrics
+      const speeds = data.agents ? data.agents.map(a => a.speed) : [];
+      const avgSpeed = speeds.length > 0 ? (speeds.reduce((s,v)=>s+v,0)/speeds.length).toFixed(1) : '0.0';
+      const amberCount = hexData.filter(h => h.risk_level === 'amber').length;
+      const redCount = hexData.filter(h => h.risk_level === 'red').length;
+
+      const elPeds = document.getElementById('metric-peds');
+      const elSpeed = document.getElementById('metric-speed');
+      const elAmber = document.getElementById('metric-amber');
+      const elRed = document.getElementById('metric-red');
+      if (elPeds) elPeds.textContent = agentCount;
+      if (elSpeed) elSpeed.textContent = `${avgSpeed} m/s`;
+      if (elAmber) elAmber.textContent = amberCount;
+      if (elRed) elRed.textContent = redCount;
+
+      // Render live reported incidents on map & badge overlay
+      if (data.incidents) {
+        renderIncidentsOnMap(data.incidents);
+      }
+
+      // Update PWA Recommendations list
+      const recs = data.recommendations || [];
+      const recList = document.getElementById('pwa-recommendations-list');
+      if (recList) {
+        if (recs.length === 0) {
+          recList.innerHTML = '<div style="color:var(--muted); font-size:12px;">No active recommendations. System monitoring.</div>';
+        } else {
+          recList.innerHTML = recs.map(r => `
+            <div class="rec-item ${r.severity}">
+              <div class="rec-title">${r.title}</div>
+              <div class="rec-reason">${r.reason}</div>
+            </div>
+          `).join('');
+        }
+      }
     } catch(e) {}
   };
 
@@ -664,7 +1370,7 @@ function renderHexData(hexData) {
       hexLayers[hex.hex].setStyle({ color, fillColor: color });
     } else {
       hexLayers[hex.hex] = L.polygon(positions, {
-        color, fillColor: color, fillOpacity: 0.25, weight: 1.5
+        color, fillColor: color, fillOpacity: 0.25, weight: 1.5, interactive: false
       }).addTo(map);
     }
 
@@ -691,6 +1397,163 @@ function renderHexData(hexData) {
   computeRoutes(hexData);
 }
 
+// ── Live Incident Map Pins & Badge Overlay ─────────────────────────────────────
+let incidentMarkers = {};
+let latestIncidentsList = [];
+
+function renderIncidentsOnMap(incidents) {
+  if (!incidents) incidents = [];
+  latestIncidentsList = incidents;
+
+  const badge = document.getElementById('incidents-badge');
+  const countText = document.getElementById('incidents-count-text');
+
+  if (badge) badge.classList.remove('hidden');
+  if (countText) {
+    countText.textContent = incidents.length === 0 
+      ? '0 Reported Incidents' 
+      : `${incidents.length} Reported Incident${incidents.length > 1 ? 's' : ''}`;
+  }
+
+  // Create custom DivIcon for incident pin
+  const incidentIcon = L.divIcon({
+    className: 'custom-pin-wrap',
+    html: '<div class="incident-map-pin">🚨</div>',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
+  });
+
+  const activeIds = new Set(incidents.map(i => i.id));
+
+  // Remove old markers no longer present
+  for (const id of Object.keys(incidentMarkers)) {
+    if (!activeIds.has(Number(id)) && !activeIds.has(id)) {
+      incidentMarkers[id].remove();
+      delete incidentMarkers[id];
+    }
+  }
+
+  // Add or update incident pins on map
+  incidents.forEach(inc => {
+    const key = inc.id || `${inc.latitude}-${inc.longitude}`;
+    const lat = inc.latitude;
+    const lon = inc.longitude;
+
+    if (!incidentMarkers[key]) {
+      const popupHtml = `
+        <div style="text-align:center; padding:4px; font-family:'Inter',sans-serif; min-width:190px; color:#0f172a;">
+          <strong style="color:#ef4444; display:block; margin-bottom:4px; font-size:12.5px;">🚨 Reported Incident</strong>
+          <div style="background:#fef2f2; border:1px solid #fca5a5; padding:6px 8px; border-radius:6px; font-size:11px; color:#991b1b; margin-bottom:6px; text-align:left;">
+            <strong>Category:</strong> ${inc.category || 'Hazard'}<br/>
+            <strong>Desc:</strong> ${inc.description}<br/>
+            <strong>Reported:</strong> ${new Date(inc.timestamp * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+          </div>
+          <div style="font-family:monospace; font-size:10.5px; color:#64748b;">
+            Lat: ${lat.toFixed(5)} | Lon: ${lon.toFixed(5)}
+          </div>
+        </div>
+      `;
+      incidentMarkers[key] = L.marker([lat, lon], { icon: incidentIcon }).addTo(map).bindPopup(popupHtml);
+    }
+  });
+}
+
+function focusOnIncidents() {
+  if (latestIncidentsList.length === 0) {
+    alert('🚨 No active reported incidents. Tap the 🚨 button at the bottom right to report a hazard!');
+    return;
+  }
+  const first = latestIncidentsList[latestIncidentsList.length - 1]; // latest reported incident
+  map.flyTo([first.latitude, first.longitude], 18, { duration: 1.2 });
+  const key = first.id || `${first.latitude}-${first.longitude}`;
+  if (incidentMarkers[key]) {
+    incidentMarkers[key].openPopup();
+  }
+}
+
+// ── Web Audio API Emergency Siren Synthesizer ──────────────────────────────────
+let audioCtx = null;
+let soundEnabled = localStorage.getItem('cs_sound_enabled') !== 'false'; // default ON
+
+function toggleSoundAlerts() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('cs_sound_enabled', soundEnabled);
+  const btn = document.getElementById('sound-btn');
+  if (btn) {
+    btn.style.background = soundEnabled ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.07)';
+    btn.textContent = soundEnabled ? '🔊' : '🔇';
+  }
+  if (soundEnabled) {
+    playPwaSiren('amber');
+  }
+}
+
+function playPwaSiren(severity = 'red') {
+  if (!soundEnabled) return;
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (severity === 'red') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(520, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(880, audioCtx.currentTime + 0.35);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.55);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.55);
+    } else {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+    }
+  } catch(e) {}
+}
+
+// ── Web Notifications & Voice Alerts ──────────────────────────────────────────
+async function toggleNotifications() {
+  if (!('Notification' in window)) {
+    alert('Push notifications are not supported on this device/browser.');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    alert('✅ Safety Notifications are already enabled!');
+    document.getElementById('notif-btn').style.background = 'rgba(16,185,129,0.3)';
+  } else if (Notification.permission !== 'denied') {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      document.getElementById('notif-btn').style.background = 'rgba(16,185,129,0.3)';
+      new Notification('🛡️ CrowdShield Active', {
+        body: 'Alerts enabled. You will receive live warnings during crowd surges.',
+        icon: '/pwa/manifest.json'
+      });
+    }
+  }
+}
+
+function speakAlert(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.rate = 1.0;
+    msg.pitch = 1.0;
+    msg.lang = lang === 'hi' ? 'hi-IN' : 'en-US';
+    window.speechSynthesis.speak(msg);
+  } catch(e) {}
+}
+
 let lastReportedRisk = 'green';
 function updateBanner(riskLevel, nearestHex) {
   const banner = document.getElementById('alert-banner');
@@ -702,17 +1565,24 @@ function updateBanner(riskLevel, nearestHex) {
     icon.textContent = '🚨';
     text.textContent = t('banner_critical') + t('use_exit');
     if (lastReportedRisk !== 'red') {
-      if ('vibrate' in navigator) {
-        navigator.vibrate([200, 100, 200]);
+      playPwaSiren('red');
+      if ('vibrate' in navigator) { navigator.vibrate([200, 100, 200, 100, 200]); }
+      speakAlert(t('banner_critical') + t('use_exit'));
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🚨 CrowdShield Critical Warning', {
+          body: t('banner_critical') + t('use_exit'),
+          icon: '/pwa/manifest.json',
+          vibrate: [200, 100, 200]
+        });
       }
     }
   } else if (riskLevel === 'amber') {
     icon.textContent = '⚠️';
     text.textContent = t('banner_warning') + t('use_exit');
     if (lastReportedRisk === 'green') {
-      if ('vibrate' in navigator) {
-        navigator.vibrate(100);
-      }
+      playPwaSiren('amber');
+      if ('vibrate' in navigator) { navigator.vibrate(150); }
+      speakAlert(t('banner_warning'));
     }
   } else {
     icon.textContent = '✅';
@@ -738,6 +1608,7 @@ function closeModal() {
 }
 
 async function submitReport() {
+  const cat  = document.getElementById('category').value;
   const desc = document.getElementById('desc').value.trim();
   const lat  = parseFloat(document.getElementById('lat').value);
   const lon  = parseFloat(document.getElementById('lon').value);
@@ -747,12 +1618,14 @@ async function submitReport() {
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
 
+  const fullDescription = `[${cat}] ${desc}`;
+
   try {
     const res = await fetch('/report-incident', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        description: desc,
+        description: fullDescription,
         latitude: lat || 28.6139,
         longitude: lon || 77.2090,
         user_id: 'citizen_pwa_' + Date.now()
@@ -785,8 +1658,146 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// ── Map Click Spot Location Popup Handler ──────────────────────────────────────
+let spotMarker = null;
+map.on('click', e => {
+  const { lat, lng } = e.latlng;
+  document.getElementById('lat').value = lat.toFixed(6);
+  document.getElementById('lon').value = lng.toFixed(6);
+
+  if (spotMarker) spotMarker.remove();
+  spotMarker = L.marker([lat, lng]).addTo(map);
+
+  const popupHtml = `
+    <div style="text-align:center; padding:4px; font-family:'Inter',sans-serif; min-width:180px; color:#0f172a;">
+      <strong style="color:#7c3aed; display:block; margin-bottom:4px; font-size:12px;">📍 Selected Spot Location</strong>
+      <div style="background:#f1f5f9; padding:5px 8px; border-radius:6px; font-family:monospace; font-size:11.5px; margin-bottom:8px; border:1px solid #cbd5e1;">
+        <strong>Lat:</strong> ${lat.toFixed(6)}<br/>
+        <strong>Lon:</strong> ${lng.toFixed(6)}
+      </div>
+      <button onclick="openModalWithSpot(${lat.toFixed(6)}, ${lng.toFixed(6)})" style="background:linear-gradient(135deg,#ef4444,#dc2626); border:none; color:white; border-radius:8px; padding:6px 12px; font-size:11px; font-weight:700; cursor:pointer; width:100%;">
+        🚨 Report Incident Here
+      </button>
+    </div>
+  `;
+  spotMarker.bindPopup(popupHtml).openPopup();
+});
+
+function openModalWithSpot(lat, lon) {
+  document.getElementById('lat').value = lat;
+  document.getElementById('lon').value = lon;
+  openModal();
+}
+
+// ── PWA Tab Navigation & Data Fetching ─────────────────────────────────────────
+function switchPwaTab(tabName) {
+  document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.pwa-tab-content').forEach(c => c.classList.remove('active'));
+  
+  const panel = document.getElementById('pwa-feature-panel');
+  const title = document.getElementById('panel-title');
+
+  if (tabName === 'map') {
+    panel.classList.add('hidden');
+    document.getElementById('tab-btn-map').classList.add('active');
+    return;
+  }
+
+  panel.classList.remove('hidden');
+  document.getElementById(`tab-btn-${tabName}`).classList.add('active');
+  document.getElementById(`tab-${tabName}`).classList.add('active');
+
+  if (tabName === 'alerts')      title.textContent = '🤖 AI Recommendations';
+  else if (tabName === 'analytics') title.textContent = '📈 Live Analytics & Metrics';
+  else if (tabName === 'logs')      { title.textContent = '📋 Incident & Rec Logs'; fetchPwaLogs(); }
+  else if (tabName === 'pitch')     title.textContent = '🎤 Pitch Deck & System Overview';
+}
+
+async function fetchPwaAiSummary() {
+  const box = document.getElementById('pwa-ai-summary-box');
+  box.style.display = 'block';
+  box.textContent = '🤖 Generating AI Session Summary...';
+  try {
+    const res = await fetch('/incident-summary');
+    if (res.ok) {
+      const data = await res.json();
+      box.textContent = data.summary;
+    }
+  } catch(e) {
+    box.textContent = 'Failed to load summary.';
+  }
+}
+
+function parseLogTimestamp(item) {
+  if (!item) return 0;
+  if (typeof item.timestamp === 'number' && !isNaN(item.timestamp)) return item.timestamp;
+  if (typeof item.timestamp === 'string') {
+    const d = new Date(item.timestamp).getTime();
+    if (!isNaN(d)) return d / 1000;
+  }
+  return item.id ? item.id * 100 : 0;
+}
+
+function formatLogTime(ts) {
+  if (!ts) return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  if (typeof ts === 'string') {
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  }
+  const num = Number(ts);
+  if (isNaN(num)) return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const date = new Date(num > 1e11 ? num : num * 1000);
+  return isNaN(date.getTime()) ? new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+async function fetchPwaLogs() {
+  try {
+    const res1 = await fetch('/incidents');
+    if (res1.ok) {
+      const logs = await res1.json();
+      // Sort strictly descending (latest log at top)
+      logs.sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
+      const list = document.getElementById('pwa-incidents-list');
+      if (logs.length === 0) list.innerHTML = '<div style="color:var(--muted); font-size:11px;">No incident reports logged yet.</div>';
+      else {
+        list.innerHTML = logs.map(i => `
+          <div class="log-entry">
+            <div><strong>${i.description}</strong><br/><span style="color:#94a3b8; font-size:10px;">📍 ${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}</span></div>
+            <span style="color:#a78bfa; font-size:10.5px; font-weight:600; text-align:right;">${formatLogTime(i.timestamp)}</span>
+          </div>
+        `).join('');
+      }
+    }
+
+    const res2 = await fetch('/recommendations');
+    if (res2.ok) {
+      const recs = await res2.json();
+      // Sort strictly descending (latest log at top)
+      recs.sort((a, b) => parseLogTimestamp(b) - parseLogTimestamp(a));
+      const list = document.getElementById('pwa-rec-history-list');
+      if (recs.length === 0) list.innerHTML = '<div style="color:var(--muted); font-size:11px;">No recommendations logged yet.</div>';
+      else {
+        list.innerHTML = recs.slice(0, 15).map(r => `
+          <div class="log-entry">
+            <div><strong style="color:${r.severity==='red'?'#ef4444':'#f59e0b'}">${r.title}</strong><br/><span style="color:#94a3b8; font-size:10px;">${r.reason}</span></div>
+            <span style="color:#a78bfa; font-size:10.5px; font-weight:600; text-align:right;">${formatLogTime(r.timestamp)}</span>
+          </div>
+        `).join('');
+      }
+    }
+  } catch(e) {}
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 connect();
+
+// Dismiss Startup Splash Screen after 2.5s
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const splash = document.getElementById('splash-screen');
+    if (splash) splash.classList.add('fade-out');
+  }, 2500);
+});
 
 // Render cached data immediately while connecting
 if (cachedHexData.length > 0) {

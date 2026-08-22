@@ -51,6 +51,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+import { mapToGps, gpsToMap, RISK_COLORS } from './models/dashboardModel';
+
 // Custom Red marker for incidents
 const incidentIcon = new L.DivIcon({
   className: 'custom-div-icon',
@@ -58,19 +60,6 @@ const incidentIcon = new L.DivIcon({
   iconSize: [24, 24],
   iconAnchor: [12, 12]
 });
-
-// Reference anchor GPS coordinate mapping helpers
-const mapToGps = (x, y) => {
-  const lat = 28.6139 + (y - 50) * 0.000009;
-  const lon = 77.2090 + (x - 50) * 0.000010;
-  return [lat, lon];
-};
-
-const gpsToMap = (lat, lon) => {
-  const y = (lat - 28.6139) / 0.000009 + 50;
-  const x = (lon - 77.2090) / 0.000010 + 50;
-  return [x, y];
-};
 
 // Static Venue boundaries & configurations
 const venueBounds = [
@@ -301,6 +290,7 @@ function App() {
   const [routes, setRoutes] = useState([]);
   const [is3DMode, setIs3DMode] = useState(false);
   const [drillRunning, setDrillRunning] = useState(false);
+  const [clickedSpot, setClickedSpot] = useState(null);
 
   // Audio Context Ref
   const audioCtxRef = useRef(null);
@@ -585,6 +575,7 @@ function App() {
 
   // Handle map click inputs
   const handleMapClick = (lat, lon) => {
+    setClickedSpot({ lat, lon });
     if (mapMode === 'select') {
       // Auto-update reporting coordinates
       setIncidentForm(prev => ({
@@ -1050,10 +1041,40 @@ function App() {
             <RoutePane />
             <MapClickHandler mapMode={mapMode} onMapClick={handleMapClick} />
 
+            {/* Clicked Spot Coordinates Marker & Popup */}
+            {clickedSpot && (
+              <Marker position={[clickedSpot.lat, clickedSpot.lon]}>
+                <Popup onClose={() => setClickedSpot(null)}>
+                  <div style={{ textAlign: 'center', fontSize: '11px', padding: '2px', color: '#1e293b' }}>
+                    <span style={{ fontWeight: 'bold', display: 'block', marginBottom: '3px', color: '#6366f1' }}>
+                      📍 Selected Spot Location
+                    </span>
+                    <div style={{ background: '#f8fafc', padding: '5px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontSize: '11.5px', marginBottom: '6px' }}>
+                      <strong>Lat:</strong> {clickedSpot.lat.toFixed(6)}<br/>
+                      <strong>Lon:</strong> {clickedSpot.lon.toFixed(6)}
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      style={{ padding: '3px 10px', fontSize: '10.5px', width: '100%' }}
+                      onClick={() => {
+                        setIncidentForm(prev => ({
+                          ...prev,
+                          latitude: parseFloat(clickedSpot.lat.toFixed(6)),
+                          longitude: parseFloat(clickedSpot.lon.toFixed(6))
+                        }));
+                      }}
+                    >
+                      ✓ Set Reporting Coordinates
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+
             {/* Venue Boundary Grid */}
             <Polygon 
               positions={venueBounds} 
-              pathOptions={{ color: 'rgba(255, 255, 255, 0.15)', fillColor: 'transparent', weight: 2, dashArray: '5, 5' }}
+              pathOptions={{ color: 'rgba(255, 255, 255, 0.15)', fillColor: 'transparent', weight: 2, dashArray: '5, 5', interactive: false }}
             >
               <Tooltip sticky>Digital Twin Venue Boundary (100m x 100m)</Tooltip>
             </Polygon>
@@ -1193,8 +1214,11 @@ function App() {
                     weight: selectedHex === hex.hex ? 3.5 : 1.5 
                   }}
                   eventHandlers={{
-                    click: () => {
+                    click: (e) => {
                       setSelectedHex(hex.hex);
+                      if (e && e.latlng) {
+                        handleMapClick(e.latlng.lat, e.latlng.lng);
+                      }
                     }
                   }}
                 >

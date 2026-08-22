@@ -42,8 +42,13 @@ sim_model = VenueCrowdModel(width=100, height=100, dt=1.0)
 
 # ── Phase 2: ML Classifier ───────────────────────────────────────────────────
 _BASE_DIR = os.path.dirname(__file__)
-_MODEL_PATH = os.path.join(_BASE_DIR, "risk_model.pkl")
-_SCALER_PATH = os.path.join(_BASE_DIR, "model_scaler.pkl")
+_MODEL_PATH = os.path.join(_BASE_DIR, "models", "risk_model.pkl")
+if not os.path.exists(_MODEL_PATH):
+    _MODEL_PATH = os.path.join(_BASE_DIR, "risk_model.pkl")
+
+_SCALER_PATH = os.path.join(_BASE_DIR, "models", "model_scaler.pkl")
+if not os.path.exists(_SCALER_PATH):
+    _SCALER_PATH = os.path.join(_BASE_DIR, "model_scaler.pkl")
 
 risk_model = None
 risk_scaler = None
@@ -165,8 +170,11 @@ def toggle_surge():
 
 @app.post("/report-incident")
 def report_incident(report: IncidentReport):
+    import time
     incident_data = report.dict()
     incident_data["id"] = len(incidents) + 1
+    if not incident_data.get("timestamp"):
+        incident_data["timestamp"] = time.time()
     incidents.append(incident_data)
     logger.info(f"Incident reported: {incident_data}")
     return {"status": "success", "incident": incident_data}
@@ -289,7 +297,8 @@ async def _run_drill_sequence():
         "description": "DEMO DRILL: Crowd crush detected at central corridor — bottleneck forming",
         "latitude": round(drill_lat, 6),
         "longitude": round(drill_lon, 6),
-        "user_id": "demo_drill_sensor"
+        "user_id": "demo_drill_sensor",
+        "timestamp": time.time()
     })
     await asyncio.sleep(15)
 
@@ -492,7 +501,8 @@ async def run_simulation_loop():
             "hexagons": hex_data,
             "alerts": alerts,
             "surge_mode": sim_model.surge_mode,
-            "recommendations": rec_engine.get_active_recommendations()
+            "recommendations": rec_engine.get_active_recommendations(),
+            "incidents": manager.incidents
         }
         
         # Update previous-tick snapshot for delta features on next iteration
