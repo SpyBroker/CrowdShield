@@ -1,9 +1,11 @@
 // Service Worker for CrowdShield Citizen PWA
-const CACHE_NAME = 'crowdshield-citizen-cache-v5';
+const CACHE_NAME = 'crowdshield-citizen-cache-v6';
 const ASSETS = [
   '/pwa/',
   '/pwa/index.html',
   '/pwa/manifest.json',
+  '/pwa/icon-192.png',
+  '/pwa/icon-512.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap'
