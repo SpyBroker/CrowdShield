@@ -235,20 +235,32 @@ class VenueCrowdModel(Model):
         self.congested_cells = []
         self.assets_updated = False
 
+        # Pre-seed initial crowd agents across the venue
+        for _ in range(35):
+            spawn_pos = (random.uniform(5.0, 80.0), random.uniform(10.0, 90.0))
+            target = random.choice(self.exits)
+            agent = PedestrianAgent(self.next_agent_id, self, spawn_pos, target)
+            self.next_agent_id += 1
+            self.schedule.add(agent)
+            self.grid.place_agent(agent, spawn_pos)
+
     def toggle_surge(self):
         self.surge_mode = not self.surge_mode
         return self.surge_mode
 
     def step(self):
-        # Spawn new agents at entrances
-        spawn_rate = 5 if self.surge_mode else 1
+        # Maintain a healthy active crowd population (25–50 agents)
+        current_count = len(self.schedule.agents) if hasattr(self.schedule, "agents") else 0
+        target_min = 45 if self.surge_mode else 25
+        needed = max(0, target_min - current_count)
+        spawn_rate = (5 if self.surge_mode else 2) + needed
+
         for _ in range(spawn_rate):
-            if random.random() < 0.7 and len(self.entrances) > 0:
+            if len(self.entrances) > 0:
                 entrance = random.choice(self.entrances)
-                spawn_pos = (entrance[0] + random.uniform(-1, 1), entrance[1] + random.uniform(-1, 1))
+                spawn_pos = (entrance[0] + random.uniform(-2, 2), entrance[1] + random.uniform(-2, 2))
                 spawn_pos = (max(0.1, min(self.width - 0.1, spawn_pos[0])), max(0.1, min(self.height - 0.1, spawn_pos[1])))
                 
-                # Pick exits
                 exits = self.exits if len(self.exits) > 0 else [(95.0, 50.0)]
                 target = random.choice(exits)
                 
