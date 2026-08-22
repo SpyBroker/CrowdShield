@@ -123,7 +123,7 @@ class PedestrianAgent(Agent):
     """An agent representing a pedestrian moving along A* path nodes to target exits."""
     def __init__(self, unique_id, model, pos, target):
         super().__init__(unique_id, model)
-        self.pos = pos
+        self.pos = None
         self.target = target
         self.base_speed = 1.2 + random.uniform(-0.2, 0.2)  # meters per second
         self.speed = self.base_speed

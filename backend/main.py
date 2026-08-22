@@ -523,7 +523,7 @@ async def run_simulation_loop():
                 "alerts": alerts,
                 "surge_mode": sim_model.surge_mode,
                 "recommendations": rec_engine.get_active_recommendations(),
-                "incidents": manager.incidents
+                "incidents": incidents
             }
             
             # Update previous-tick snapshot for delta features on next iteration
