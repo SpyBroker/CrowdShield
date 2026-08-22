@@ -336,188 +336,207 @@ def map_to_gps(x, y):
     lon = LON_ANCHOR + (x - 50) * 0.000010
     return lat, lon
 
+def h3_to_cell(lat, lon, res):
+    if hasattr(h3, 'geo_to_h3'):
+        return h3.geo_to_h3(lat, lon, res)
+    return h3.latlng_to_cell(lat, lon, res)
+
+def h3_to_boundary(h3_index):
+    if hasattr(h3, 'h3_to_geo_boundary'):
+        return h3.h3_to_geo_boundary(h3_index)
+    return h3.cell_to_boundary(h3_index)
+
+def h3_to_ring(h3_index, k=1):
+    if hasattr(h3, 'k_ring'):
+        return h3.k_ring(h3_index, k)
+    return h3.grid_disk(h3_index, k)
+
 async def run_simulation_loop():
     """Background task to advance the simulation and broadcast updates."""
     while True:
-        sim_model.step()
-        agents = sim_model.get_agent_positions()
-        
-        # Bin agents by H3 hexagon
-        hex_bins = {}
-        for agent in agents:
-            lat, lon = map_to_gps(agent["x"], agent["y"])
-            h3_index = h3.geo_to_h3(lat, lon, H3_RESOLUTION)
+        try:
+            sim_model.step()
+            agents = sim_model.get_agent_positions()
             
-            if h3_index not in hex_bins:
-                hex_bins[h3_index] = {
-                    "hex": h3_index,
-                    "agents": [],
-                    "speeds": [],
-                    "boundary": h3.h3_to_geo_boundary(h3_index)
-                }
+            # Bin agents by H3 hexagon
+            hex_bins = {}
+            for agent in agents:
+                lat, lon = map_to_gps(agent["x"], agent["y"])
+                h3_index = h3_to_cell(lat, lon, H3_RESOLUTION)
+                
+                if h3_index not in hex_bins:
+                    hex_bins[h3_index] = {
+                        "hex": h3_index,
+                        "agents": [],
+                        "speeds": [],
+                        "boundary": h3_to_boundary(h3_index)
+                    }
+                
+                hex_bins[h3_index]["agents"].append(agent)
+                hex_bins[h3_index]["speeds"].append(agent["speed"])
+
+            # Pre-compute per-cell stats for neighbour lookups
+            cell_stats = {}
+            for h3_index, data in hex_bins.items():
+                count = len(data["agents"])
+                avg_spd = sum(data["speeds"]) / count if count else 0.0
+                cell_stats[h3_index] = {"density": count, "avg_speed": avg_spd}
+
+            # Track previous tick values for delta features
+            if not hasattr(run_simulation_loop, "_prev_stats"):
+                run_simulation_loop._prev_stats = {}
+            prev_stats = run_simulation_loop._prev_stats
+
+            # Compute metrics & risk score per hexagon
+            hex_data = []
+            alerts = []
             
-            hex_bins[h3_index]["agents"].append(agent)
-            hex_bins[h3_index]["speeds"].append(agent["speed"])
+            for h3_index, data in hex_bins.items():
+                agent_count = len(data["agents"])
+                avg_speed = sum(data["speeds"]) / agent_count if agent_count > 0 else 0
 
-        # Pre-compute per-cell stats for neighbour lookups
-        cell_stats = {}
-        for h3_index, data in hex_bins.items():
-            count = len(data["agents"])
-            avg_spd = sum(data["speeds"]) / count if count else 0.0
-            cell_stats[h3_index] = {"density": count, "avg_speed": avg_spd}
+                # ── Temporal delta features ──────────────────────────────────
+                prev = prev_stats.get(h3_index, {"density": 0, "avg_speed": avg_speed})
+                d_density = agent_count - prev["density"]
+                d_speed = avg_speed - prev["avg_speed"]
 
-        # Track previous tick values for delta features
-        if not hasattr(run_simulation_loop, "_prev_stats"):
-            run_simulation_loop._prev_stats = {}
-        prev_stats = run_simulation_loop._prev_stats
+                # ── Neighbour features ───────────────────────────────────────
+                neighbours = set(h3_to_ring(h3_index, 1)) - {h3_index}
+                nb_dens = [cell_stats[n]["density"] for n in neighbours if n in cell_stats]
+                nb_spd  = [cell_stats[n]["avg_speed"] for n in neighbours if n in cell_stats]
+                neighbor_density = max(nb_dens) if nb_dens else 0
+                neighbor_speed   = min(nb_spd)  if nb_spd  else avg_speed
 
-        # Compute metrics & risk score per hexagon
-        hex_data = []
-        alerts = []
-        
-        for h3_index, data in hex_bins.items():
-            agent_count = len(data["agents"])
-            avg_speed = sum(data["speeds"]) / agent_count if agent_count > 0 else 0
-
-            # ── Temporal delta features ──────────────────────────────────
-            prev = prev_stats.get(h3_index, {"density": 0, "avg_speed": avg_speed})
-            d_density = agent_count - prev["density"]
-            d_speed = avg_speed - prev["avg_speed"]
-
-            # ── Neighbour features ───────────────────────────────────────
-            neighbours = h3.k_ring(h3_index, 1) - {h3_index}
-            nb_dens = [cell_stats[n]["density"] for n in neighbours if n in cell_stats]
-            nb_spd  = [cell_stats[n]["avg_speed"] for n in neighbours if n in cell_stats]
-            neighbor_density = max(nb_dens) if nb_dens else 0
-            neighbor_speed   = min(nb_spd)  if nb_spd  else avg_speed
-
-            # ── Flow variance ────────────────────────────────────────────
-            agents_in_cell = data["agents"]
-            if len(agents_in_cell) >= 2:
-                headings = [math.atan2(a["heading"][1], a["heading"][0]) for a in agents_in_cell]
-                sin_m = sum(math.sin(h) for h in headings) / len(headings)
-                cos_m = sum(math.cos(h) for h in headings) / len(headings)
-                flow_variance = round(1.0 - math.hypot(sin_m, cos_m), 4)
-            else:
-                flow_variance = 0.0
-
-            # ── Rule-based risk (Phase 1) ────────────────────────────────
-            if agent_count >= 8 and avg_speed < 0.6:
-                rule_risk = "red"
-            elif agent_count >= 4 and avg_speed < 0.9:
-                rule_risk = "amber"
-            else:
-                rule_risk = "green"
-
-            # ── ML classifier (Phase 2) ──────────────────────────────────
-            ml_confidence = None
-            ml_risk = rule_risk  # fallback
-
-            if risk_model is not None and risk_scaler is not None:
-                feature_vec = np.array([[  
-                    agent_count, avg_speed,
-                    d_density, d_speed,
-                    neighbor_density, neighbor_speed,
-                    flow_variance
-                ]])
-                feature_scaled = risk_scaler.transform(feature_vec)
-                proba = risk_model.predict_proba(feature_scaled)[0]
-                pred_class = int(np.argmax(proba))
-                confidence = float(proba[pred_class])
-
-                if pred_class == 2:
-                    ml_risk = "red"
-                elif pred_class == 1:
-                    ml_risk = "amber"
+                # ── Flow variance ────────────────────────────────────────────
+                agents_in_cell = data["agents"]
+                if len(agents_in_cell) >= 2:
+                    headings = [math.atan2(a["heading"][1], a["heading"][0]) for a in agents_in_cell]
+                    sin_m = sum(math.sin(h) for h in headings) / len(headings)
+                    cos_m = sum(math.cos(h) for h in headings) / len(headings)
+                    flow_variance = round(1.0 - math.hypot(sin_m, cos_m), 4)
                 else:
-                    ml_risk = "green"
+                    flow_variance = 0.0
 
-                ml_confidence = round(confidence * 100, 1)
-
-            # ── Dual-gate fusion: require agreement for RED ──────────────
-            if risk_model is not None:
-                if rule_risk == "red" and ml_risk == "red":
-                    risk_level = "red"
-                elif rule_risk in ("red", "amber") or ml_risk in ("red", "amber"):
-                    risk_level = "amber"
+                # ── Rule-based risk (Phase 1) ────────────────────────────────
+                if agent_count >= 8 and avg_speed < 0.6:
+                    rule_risk = "red"
+                elif agent_count >= 4 and avg_speed < 0.9:
+                    rule_risk = "amber"
                 else:
-                    risk_level = "green"
-            else:
-                risk_level = rule_risk  # rule-only mode
+                    rule_risk = "green"
 
-            # ── Build alert if needed ────────────────────────────────────
-            conf_str = f" (ML: {ml_confidence}% confident)" if ml_confidence else ""
-            if risk_level == "red":
-                alert_msg = (
-                    f"CRITICAL CONGESTION: Bottleneck detected in cell {h3_index}."
-                    f" Speed dropped below 0.6m/s.{conf_str}"
-                )
-                alerts.append({
+                # ── ML classifier (Phase 2) ──────────────────────────────────
+                ml_confidence = None
+                ml_risk = rule_risk  # fallback
+
+                if risk_model is not None and risk_scaler is not None:
+                    feature_vec = np.array([[  
+                        agent_count, avg_speed,
+                        d_density, d_speed,
+                        neighbor_density, neighbor_speed,
+                        flow_variance
+                    ]])
+                    feature_scaled = risk_scaler.transform(feature_vec)
+                    proba = risk_model.predict_proba(feature_scaled)[0]
+                    pred_class = int(np.argmax(proba))
+                    confidence = float(proba[pred_class])
+
+                    if pred_class == 2:
+                        ml_risk = "red"
+                    elif pred_class == 1:
+                        ml_risk = "amber"
+                    else:
+                        ml_risk = "green"
+
+                    ml_confidence = round(confidence * 100, 1)
+
+                # ── Dual-gate fusion: require agreement for RED ──────────────
+                if risk_model is not None:
+                    if rule_risk == "red" and ml_risk == "red":
+                        risk_level = "red"
+                    elif rule_risk in ("red", "amber") or ml_risk in ("red", "amber"):
+                        risk_level = "amber"
+                    else:
+                        risk_level = "green"
+                else:
+                    risk_level = rule_risk  # rule-only mode
+
+                # ── Build alert if needed ────────────────────────────────────
+                conf_str = f" (ML: {ml_confidence}% confident)" if ml_confidence else ""
+                if risk_level == "red":
+                    alert_msg = (
+                        f"CRITICAL CONGESTION: Bottleneck detected in cell {h3_index}."
+                        f" Speed dropped below 0.6m/s.{conf_str}"
+                    )
+                    alerts.append({
+                        "hex": h3_index,
+                        "level": "red",
+                        "message": alert_msg,
+                        "recommendation": "Open nearest alternative gates and reroute inbound flow immediately.",
+                        "ml_confidence": ml_confidence
+                    })
+                elif risk_level == "amber":
+                    alerts.append({
+                        "hex": h3_index,
+                        "level": "amber",
+                        "message": f"WARNING: Crowd density rising in cell {h3_index}.{conf_str}",
+                        "recommendation": "Monitor cell and consider deploying crowd flow monitors.",
+                        "ml_confidence": ml_confidence
+                    })
+
+                hex_data.append({
                     "hex": h3_index,
-                    "level": "red",
-                    "message": alert_msg,
-                    "recommendation": "Open nearest alternative gates and reroute inbound flow immediately.",
-                    "ml_confidence": ml_confidence
-                })
-            elif risk_level == "amber":
-                alerts.append({
-                    "hex": h3_index,
-                    "level": "amber",
-                    "message": f"WARNING: Crowd density rising in cell {h3_index}.{conf_str}",
-                    "recommendation": "Monitor cell and consider deploying crowd flow monitors.",
-                    "ml_confidence": ml_confidence
+                    "count": agent_count,
+                    "avg_speed": round(avg_speed, 2),
+                    "risk_level": risk_level,
+                    "ml_confidence": ml_confidence,
+                    "d_density": d_density,
+                    "flow_variance": flow_variance,
+                    "boundary": [[p[0], p[1]] for p in data["boundary"]]
                 })
 
-            hex_data.append({
-                "hex": h3_index,
-                "count": agent_count,
-                "avg_speed": round(avg_speed, 2),
-                "risk_level": risk_level,
-                "ml_confidence": ml_confidence,
-                "d_density": d_density,
-                "flow_variance": flow_variance,
-                "boundary": [[p[0], p[1]] for p in data["boundary"]]
-            })
+            # Update simulator congested cells list for dynamic agent routing
+            congested_cells = []
+            for hex_item in hex_data:
+                if hex_item["risk_level"] in ("red", "amber"):
+                    boundary = hex_item["boundary"]
+                    lat_c = sum(p[0] for p in boundary) / len(boundary)
+                    lon_c = sum(p[1] for p in boundary) / len(boundary)
+                    y_c = (lat_c - LAT_ANCHOR) / 0.000009 + 50
+                    x_c = (lon_c - LON_ANCHOR) / 0.000010 + 50
+                    congested_cells.append({
+                        "x": x_c,
+                        "y": y_c,
+                        "risk_level": hex_item["risk_level"]
+                    })
+            sim_model.congested_cells = congested_cells
 
-        # Update simulator congested cells list for dynamic agent routing
-        congested_cells = []
-        for hex_item in hex_data:
-            if hex_item["risk_level"] in ("red", "amber"):
-                boundary = hex_item["boundary"]
-                lat_c = sum(p[0] for p in boundary) / len(boundary)
-                lon_c = sum(p[1] for p in boundary) / len(boundary)
-                y_c = (lat_c - LAT_ANCHOR) / 0.000009 + 50
-                x_c = (lon_c - LON_ANCHOR) / 0.000010 + 50
-                congested_cells.append({
-                    "x": x_c,
-                    "y": y_c,
-                    "risk_level": hex_item["risk_level"]
-                })
-        sim_model.congested_cells = congested_cells
+            # ── Phase 3: Evaluate recommendations ────────────────────────────
+            new_recs = rec_engine.evaluate(hex_data)
+            if new_recs:
+                logger.info(f"Recommendation engine fired {len(new_recs)} new recommendation(s).")
 
-        # ── Phase 3: Evaluate recommendations ────────────────────────────
-        new_recs = rec_engine.evaluate(hex_data)
-        if new_recs:
-            logger.info(f"Recommendation engine fired {len(new_recs)} new recommendation(s).")
+            # Compile full payload
+            payload = {
+                "agents": [{"id": a["id"], "lat": map_to_gps(a["x"], a["y"])[0], "lon": map_to_gps(a["x"], a["y"])[1], "speed": a["speed"]} for a in agents],
+                "hexagons": hex_data,
+                "alerts": alerts,
+                "surge_mode": sim_model.surge_mode,
+                "recommendations": rec_engine.get_active_recommendations(),
+                "incidents": manager.incidents
+            }
+            
+            # Update previous-tick snapshot for delta features on next iteration
+            run_simulation_loop._prev_stats = {
+                h3_idx: {"density": cell_stats[h3_idx]["density"], "avg_speed": cell_stats[h3_idx]["avg_speed"]}
+                for h3_idx in cell_stats
+            }
 
-        # Compile full payload
-        payload = {
-            "agents": [{"id": a["id"], "lat": map_to_gps(a["x"], a["y"])[0], "lon": map_to_gps(a["x"], a["y"])[1], "speed": a["speed"]} for a in agents],
-            "hexagons": hex_data,
-            "alerts": alerts,
-            "surge_mode": sim_model.surge_mode,
-            "recommendations": rec_engine.get_active_recommendations(),
-            "incidents": manager.incidents
-        }
-        
-        # Update previous-tick snapshot for delta features on next iteration
-        run_simulation_loop._prev_stats = {
-            h3_idx: {"density": cell_stats[h3_idx]["density"], "avg_speed": cell_stats[h3_idx]["avg_speed"]}
-            for h3_idx in cell_stats
-        }
+            # Broadcast to all websocket clients
+            await manager.broadcast(json.dumps(payload))
+        except Exception as err:
+            logger.error(f"Simulation loop tick error: {err}")
 
-        # Broadcast to all websocket clients
-        await manager.broadcast(json.dumps(payload))
         await asyncio.sleep(1.0)
 
 @app.on_event("startup")
