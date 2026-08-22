@@ -69,7 +69,14 @@ frontend/node_modules/
 Thumbs.db
 desktop.ini
 
+# ── Android Build Artifacts & Keystores ──────────────────────────────────────
+.gradle/
+*.apk
+*.idsig
+*.keystore
+local.properties
+manifest-checksum.txt
+
 # ── Project-specific ─────────────────────────────────────────────────────────
-# Scratch / temp helper scripts created during development
 check_build.py
 *.tmp
