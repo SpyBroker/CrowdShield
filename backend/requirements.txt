@@ -4,5 +4,5 @@ mesa>=2.1.0,<3.0.0
 h3>=3.7.6
 websockets>=12.0
 pandas>=2.0.0
-numpy>=1.24.0
-scikit-learn>=1.4.0
+numpy>=1.24.0,<2.0.0
+scikit-learn>=1.4.0,<1.6.0

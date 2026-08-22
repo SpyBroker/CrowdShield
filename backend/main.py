@@ -54,11 +54,16 @@ risk_model = None
 risk_scaler = None
 
 if os.path.exists(_MODEL_PATH) and os.path.exists(_SCALER_PATH):
-    with open(_MODEL_PATH, "rb") as f:
-        risk_model = pickle.load(f)
-    with open(_SCALER_PATH, "rb") as f:
-        risk_scaler = pickle.load(f)
-    logger.info("Phase 2 ML risk classifier loaded successfully.")
+    try:
+        with open(_MODEL_PATH, "rb") as f:
+            risk_model = pickle.load(f)
+        with open(_SCALER_PATH, "rb") as f:
+            risk_scaler = pickle.load(f)
+        logger.info("Phase 2 ML risk classifier loaded successfully.")
+    except Exception as e:
+        logger.warning(f"ML model load exception ({e}). Operating in rule-based risk mode.")
+        risk_model = None
+        risk_scaler = None
 else:
     logger.warning(
         "risk_model.pkl / model_scaler.pkl not found. "
