@@ -3,7 +3,26 @@ import random
 import heapq
 from mesa import Agent, Model
 from mesa.space import ContinuousSpace
-from mesa.time import RandomActivation
+try:
+    from mesa.time import RandomActivation
+except ImportError:
+    try:
+        from mesa.time import BaseScheduler as RandomActivation
+    except ImportError:
+        # Mesa 3.x fallback: simple custom activation list wrapper
+        class RandomActivation:
+            def __init__(self, model):
+                self.model = model
+                self.agents = []
+            def add(self, agent):
+                self.agents.append(agent)
+            def remove(self, agent):
+                if agent in self.agents:
+                    self.agents.remove(agent)
+            def step(self):
+                random.shuffle(self.agents)
+                for agent in list(self.agents):
+                    agent.step()
 
 def find_path_astar(start_x, start_y, end_x, end_y, obstacles, congested_cells, width=100, height=100):
     scale = 2.0
